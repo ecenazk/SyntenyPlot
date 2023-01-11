@@ -1,0 +1,192 @@
+---
+title: "BUSCO Syntheny Plot from BUSCO orthologs of ortho-db diptera_odb10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Script Adapted from BUSCO
+the script is adapted from 2021 Paper "BUSCO: Assessing Genomic Data Quality and Beyond" (doi: 10.1002/cpz1.32):
+
+ - BUSCO Support Protocol 2: VISUALIZING BUSCO RESULTS
+    - busco_protocol/support_protocol2/plot_syntenies/scripts/plot_synteny2.R
+    - (https://gitlab.com/ezlab/busco_protocol/-/blob/main/support_protocol2/plot_syntenies/scripts/plot_synteny2.R)
+
+ - diptera_odb10 of ortho-db database has 3285 BUSCO markers
+    - https://busco.ezlab.org/list_of_lineages.html
+
+## Karyotype and Coordinate Files
+ - karyotype file is done by getting the contigs as a fasta file (read in with library(microseq)), then extracting names, lengths, etc
+ - coordinates file is done by subsetting the full_tsv files that are outcomes of BUSCO run on contigs
+ - making sure contig names on coordinates and karyotypes match
+
+```{r library}
+library(RIdeogram)
+```
+the visualization will be done by ideogram, so we only need this library
+
+```{r data names}
+species1 <- "Dmel"                                                      # assign a name to species1
+karyotype1_file <- "BUSCO/OrthoDB/Karyotypes/Dmel_karyotype.txt"        # karyotype of species 1
+coord1_file <- "BUSCO/OrthoDB/Coordinates/Dmel_coordinates.txt"         # busco coordinates
+
+species2 <- "MI"                                                      # assign a name to species2
+karyotype2_file <- "BUSCO/OrthoDB/Karyotypes/MI_karyotype.txt"        # karyotype of species 2
+coord2_file <- "BUSCO/OrthoDB/Coordinates/MI_coordinates.txt"         # busco coordinates
+
+out_folder <- paste0("BUSCO/OrthoDB/SynthenyMaps/",species1,"_vs_",species2,"/")
+```
+just getting the data file names
+
+```{r coordinate}
+
+coord1 <- read.csv(file=coord1_file, sep="\t", header = FALSE, stringsAsFactors = F)    # coordinate 1
+coord2 <- read.csv(file=coord2_file, sep="\t", header = FALSE, stringsAsFactors = F)    # coordinate 2
+
+sinteny_coord <- merge(coord1, coord2, by="V1")                                         # merge the coordinate data by ortholog name
+sinteny_coord <- na.omit(sinteny_coord)                                                 # omit any possible NULL values
+
+colnames(sinteny_coord) <- c("Ortho","Stat1","Species1","Start1","End1",                # change column names
+                             "Stat2","Species2","Start2","End2")
+
+sinteny_coord$fill <- "2fbeed"                                                          # add a column to give fill color
+sinteny_coord[sinteny_coord$Species1=="chr-X",]$fill <- "FFD966"                        # can specify another fill color for certain orthologs
+sinteny_coord[sinteny_coord$Species1=="chr-2L",]$fill <- "FF6E63"                       # can specify another fill color for certain orthologs
+
+##################################################################################################################################################
+
+write.table(x = sinteny_coord[sinteny_coord$Species1 == "chr-X",], quote = FALSE, row.names = FALSE, sep = "\t",   # write sinteny map of chr-X
+            col.names = TRUE, file = paste0(out_folder,species1,"_",species2,"_","chr-X","_sinteny.txt"))
+write.table(x = sinteny_coord[sinteny_coord$Species1 == "chr-2L",], quote = FALSE, row.names = FALSE, sep = "\t",  # write sinteny map of chr-2L
+            col.names = TRUE, file = paste0(out_folder,species1,"_",species2,"_","chr-2L","_sinteny.txt"))
+write.table(x = sinteny_coord[sinteny_coord$Species1 == "chr-2R",], quote = FALSE, row.names = FALSE, sep = "\t",  # write sinteny map of chr-2R
+            col.names = TRUE, file = paste0(out_folder,species1,"_",species2,"_","chr-2R","_sinteny.txt"))
+write.table(x = sinteny_coord[sinteny_coord$Species1 == "chr-3L",], quote = FALSE, row.names = FALSE, sep = "\t",  # write sinteny map of chr-3L
+            col.names = TRUE, file = paste0(out_folder,species1,"_",species2,"_","chr-3L","_sinteny.txt"))
+write.table(x = sinteny_coord[sinteny_coord$Species1 == "chr-3R",], quote = FALSE, row.names = FALSE, sep = "\t",  # write sinteny map of chr-3R
+            col.names = TRUE, file = paste0(out_folder,species1,"_",species2,"_","chr-3R","_sinteny.txt"))
+write.table(x = sinteny_coord[sinteny_coord$Species1 == "chr-4",], quote = FALSE, row.names = FALSE, sep = "\t",   # write sinteny map of chr-4
+            col.names = TRUE, file = paste0(out_folder,species1,"_",species2,"_","chr-4","_sinteny.txt"))
+write.table(x = sinteny_coord[sinteny_coord$Species1 == "chr-Y",], quote = FALSE, row.names = FALSE, sep = "\t",   # write sinteny map of chr-Y
+            col.names = TRUE, file = paste0(out_folder,species1,"_",species2,"_","chr-Y","_sinteny.txt"))
+
+write.table(x = sinteny_coord, quote = FALSE, row.names = FALSE, sep = "\t", col.names = TRUE,                     # write sinteny map of all chr
+            file = paste0(out_folder,species1,"_",species2,"_sinteny.txt"))
+
+##################################################################################################################################################
+
+sinteny_choice <- read.table(paste0(out_folder,species1, "_", species2, "_chr-2L_sinteny.txt"),  # load the syntheny to use (whatever you'll subset karyotype with)
+                             sep = "\t", header = T, stringsAsFactors = F)
+
+sinteny_coord <- sinteny_coord[which(sinteny_coord$Species2 %in% sinteny_choice$Species2),]      # get all syntheny entries for contigs with at least one ortholog on 2L
+sinteny_coord <- sinteny_coord[, c(-1, -2, -6)]                                                  # get rid of the ortholog name and status columns
+
+```
+this part is to bind the coordinates by orthologous groups and write single chromosome syntheny files:
+        - merge the two coordinate files by the ortholog names so that the orthologous pairs are in the same row
+        - using merge here is the join of SQL, so that one ortho group can have more than one pairs in different rows, all combinations covered
+        - also omit NA values so that if one of the the species don't have that ortholog don't take that info in the syntheny maps
+        - change the column names for easy understanding and create a pseudo column fill in case colors wanted for visualization
+        
+        - add a column named fill to specify orthology colors such that:
+             * e.g. to color the lines as in the protocol figure
+                 > sinteny_coord$fill <- "2fbeed"
+                 > sinteny_coord[sinteny_coord$Species_1==1,]$fill <- "FF6E63" would color the chr-X going lines different
+                 > sinteny_coord[sinteny_coord$Species_1==4,]$fill <- "EEFF70" would color the chr-3L going lines different
+        
+        - write syntheny groups for single Dmel chromosomes in different files for later analysis
+        - load only the syntheny you want to use 
+        - get all the syntheny entries for contigs with at least one ortholog on the chosen chromosome (2L), so, if they match somewhere else, also see that
+             * so now, your syntheny_coord file has the entries for MI/MV contigs which have AT LEAST 1 ortholog on the chosen chromosome (2L)
+             * all entries for those contigs are retained, so that if they map also to some other chromosome, you'll see that
+        
+        - then get rid of the ortholog name and status columns since you don't need that info any longer (they already served you)
+        - now the sinteny_coord has columns Species with the chr info, Start with start and End with end position, for both species back to back
+
+```{r karyotype}
+
+karyotype1 <- read.csv(file=karyotype1_file, sep="\t", header = TRUE, stringsAsFactors = F)   # karyotype 1 full
+karyotype2 <- read.csv(file=karyotype2_file, sep="\t", header = TRUE, stringsAsFactors = F)   # karyotype 2 full
+
+##################################################################################################################################################
+
+karyotype1 <- karyotype1[which(karyotype1$Chr %in% karyotype1$Chr),]                                                     
+karyotype2 <- karyotype2[which(karyotype2$Chr %in% sinteny_coord[which(sinteny_coord$Species1 == "chr-2L"),]$Species2),]
+
+##################################################################################################################################################
+
+karyotype_all <- rbind(karyotype1, karyotype2, make.row.names=FALSE)                          # merge  two kayotypes
+
+karyotype_all$fill <- "blank"                                                                 # add a pseudo column to give fill color
+karyotype_all[karyotype_all$species==species1, ]$fill <- "8AFFBB"                             # give fill color to species 1 
+karyotype_all[karyotype_all$species==species2, ]$fill <- "95FF7D"                             # give fill color to species 2
+
+karyotype_all <- karyotype_all[, c(1,2,3,7,4,5,6)]                                            # rearrenge the columns
+karyotype_all <- as.data.frame(karyotype_all, stringsAsFactors = F )                          # make it a data frame for easy access
+```
+this part is only for the sorting and visualization of karyotypes:
+        - load the two karyotypes and then filter them such that
+                    * Dmel keeps all the chromosomes it normally has by:
+                              > subsetting the karyotype1 by itself
+                    * MI/MV/MIII only keeps the contigs that have AT LEAST one ortholog on 2L by:
+                              > subsetting the karyotype2 chr by the sinteny coord Species 2 entries of the sinteny coord file that has chr-2L on Species 1
+        - merge the two karyotypes by columns, and then the fill column will decide the color fill of the karyotypes for specific species
+        - the sequence of the chromosomes or sequences in the karyotype will be in the order they are given in the karyotype files
+        - data frame type of the variable makes it easy access
+
+```{r convert names into integers}
+
+chromosomes_species1 <- karyotype1$Chr                                            # get the chr names
+chromosomes_species2 <- karyotype2$Chr                                            # get the chr names
+
+for(seq in chromosomes_species1) {                                                # convert the names of chrs to ints by their karyotype index for species 1
+  index <- which(grepl(seq, karyotype_all$Chr))
+  sinteny_coord$Species1 <- gsub(seq, index, sinteny_coord$Species1)
+}
+
+for(seq in chromosomes_species2) {                                                # convert the names of chrs to ints by their karyotype index for species 1
+  index <- which(grepl(seq, karyotype_all$Chr))
+  index_species_2 <- index - length(chromosomes_species1)
+  sinteny_coord$Species2 <- gsub(seq, index_species_2, sinteny_coord$Species2)
+}
+```
+here, convert names into integers according to position in karyotype_all and change the species name to chr-integer in the merged coord table
+        - directly convert the chromosomes to integers for species 1
+        - again convert the chromosomes to integers for species 2 to but do index - length(chromosomes_species1) so that index again starts from 1
+        - not sure why we need indexs but apparently that is what the ideogram likes to use?
+        - in the syntheny coord file, only the entries that have both Dmel and MI/MV contigs in the chromosome karyotype file will be turned to integers
+                 - those are the ones you want to visualize, so in the next step will subset only them
+
+```{r plot the results}
+
+sinteny_coord <- sinteny_coord[with(sinteny_coord, order(fill)),]      # order the entries by fill column
+sinteny_coord <- na.omit(sinteny_coord)                                # omit any possible NULL values
+
+sinteny_coord$Species1 <- strtoi(sinteny_coord$Species1)               # make the chr names numeric (gsub made them strings, but svg need numeric)
+sinteny_coord$Species2 <- strtoi(sinteny_coord$Species2)               # make the chr names numeric (gsub made them strings, but svg need numeric)
+
+# Plot 
+ideogram(karyotype = karyotype_all, synteny = sinteny_coord, 
+         output = paste0(out_folder,species1, "_", species2, "_sinteny.svg"))
+
+convertSVG(paste0(out_folder,species1, "_", species2, "_sinteny.svg"), device = "png", 
+           file = paste0(out_folder,species1,"_",species2,"_sinteny.png"), dpi = 500)
+```
+Plot:
+    - ATTENTION: need to run twice for it to actually work, otherwise gives an error.. stupid but works, just run twice!
+    - using the karyotype and synteny files create an ideogram
+    - here synteny = sinteny_coord[-1,] in order to skip the first row which is actually the header
+    - convert the ideogram .svg file to visualized .png file
+
+
+Analysis:
+    - from the 3285 orthologs ortho-db database of BUSCO markers:
+              - for MI = 5353 genes matched to their synthenies in Dmel
+              - for MIII = 4702 genes matched to their synthenies in Dmel
+              - for MV = 4259 genes matched to their synthenies in Dmel
+              
+          * REALISE: 'genes' here are not unique genes, can also be same gene in different haplotype, it just means that 
+                there are that many sequences that matched to a syntheny group on a unique(contig,start.pos,ens.pos)
+          

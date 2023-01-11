@@ -1,0 +1,8 @@
+Chr	Start	End	species	size	color
+chr-X	1	23542271	Dmel	12	25252
+chr-2L	1	23513712	Dmel	12	25252
+chr-2R	1	25286936	Dmel	12	25252
+chr-3L	1	28110227	Dmel	12	25252
+chr-3R	1	32079331	Dmel	12	25252
+chr-4	1	1348131	Dmel	12	25252
+chr-Y	1	3667352	Dmel	12	25252
